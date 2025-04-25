@@ -2,6 +2,7 @@ const socket = io("/");
 const videoGrid = document.getElementById("video-grid");
 const muteBtn = document.getElementById("muteBtn");
 const videoBtn = document.getElementById("videoBtn");
+const flipCameraBtn = document.getElementById("flipCameraBtn");
 const screenShareBtn = document.getElementById("screenShareBtn");
 const leaveBtn = document.getElementById("leaveBtn");
 const copyBtn = document.getElementById("copyBtn");
@@ -12,6 +13,21 @@ const chatMessages = document.getElementById("chat-messages");
 const chatInput = document.getElementById("chat-input");
 const sendMessageBtn = document.getElementById("sendMessageBtn");
 const fileUploadInput = document.getElementById("file-upload");
+
+// New feature elements
+const raiseHandBtn = document.getElementById("raiseHandBtn");
+const fullScreenBtn = document.getElementById("fullScreenBtn");
+const whiteboardBtn = document.getElementById("whiteboardBtn");
+const whiteboardTabBtn = document.getElementById("whiteboardTabBtn");
+const whiteboardPanel = document.getElementById("whiteboardPanel");
+const whiteboard = document.getElementById("whiteboard");
+const emojiBtn = document.getElementById("emojiBtn");
+const emojiPicker = document.getElementById("emojiPicker");
+const pencilTool = document.getElementById("pencilTool");
+const eraserTool = document.getElementById("eraserTool");
+const clearWhiteboard = document.getElementById("clearWhiteboard");
+const colorPicker = document.getElementById("colorPicker");
+const brushSize = document.getElementById("brushSize");
 
 // Username change elements
 const changeNameBtn = document.getElementById("changeNameBtn");
@@ -34,11 +50,23 @@ let myVideoStream;
 let myVideo;
 let isAudioMuted = false;
 let isVideoOff = false;
+let isCameraFlipped = true; // Default to flipped
 let sidebarVisible = false;
 let unreadMessages = 0;
 let isScreenSharing = false;
 let screenStream = null;
 let originalStream = null;
+
+// New feature states
+let isHandRaised = false;
+let currentFullScreenVideo = null;
+let isWhiteboardVisible = false;
+let isDrawing = false;
+let whiteboardContext = null;
+let whiteboardDrawingData = [];
+let currentTool = "pencil";
+let currentColor = "#000000";
+let currentSize = 5;
 
 // Store username
 let myUserName = "You";
@@ -100,6 +128,14 @@ navigator.mediaDevices
   .then((stream) => {
     // Set the stream and add our video to the grid
     myVideoStream = stream;
+
+    // Check if camera flip preference exists in localStorage, otherwise use default (true)
+    isCameraFlipped = localStorage.getItem("cameraFlipped") !== "false";
+    if (isCameraFlipped) {
+      flipCameraBtn.classList.add("active");
+    }
+
+    // Add video to grid with proper flip state
     addVideoStream(myVideo, stream, null, true);
 
     // Answer calls from other users
@@ -237,6 +273,40 @@ socket.on("user-removed", (userId) => {
   addChatMessage({
     system: true,
     message: `${userNames[userId] || "A user"} was removed from the room`,
+  });
+});
+
+// Socket event when a user raises/lowers hand
+socket.on("user-hand-status", (userId, isRaised) => {
+  // Update UI to show hand raised status
+  const userVideoContainer = document.querySelector(
+    `[data-user-id="${userId}"]`
+  );
+
+  if (userVideoContainer) {
+    if (isRaised) {
+      // Add hand icon if not already there
+      if (!userVideoContainer.querySelector(".hand-icon")) {
+        const handIcon = document.createElement("div");
+        handIcon.className = "hand-icon";
+        handIcon.innerHTML = "✋";
+        userVideoContainer.appendChild(handIcon);
+      }
+    } else {
+      // Remove hand icon if it exists
+      const handIcon = userVideoContainer.querySelector(".hand-icon");
+      if (handIcon) {
+        handIcon.remove();
+      }
+    }
+  }
+
+  // Add system message
+  addChatMessage({
+    system: true,
+    message: isRaised
+      ? `${userNames[userId] || "A user"} raised their hand`
+      : `${userNames[userId] || "A user"} lowered their hand`,
   });
 });
 
@@ -527,6 +597,12 @@ myPeer.on("open", (id) => {
 
   // Initialize file sharing
   initFileSharing();
+
+  // Initialize emoji picker
+  initEmojiPicker();
+
+  // Initialize whiteboard
+  initWhiteboard();
 });
 
 // Log any peer connection errors
@@ -621,6 +697,11 @@ function addVideoStream(
   }
 
   video.srcObject = stream;
+  // If this is the local user and camera is flipped, add the flipped class
+  if (isLocalUser && isCameraFlipped) {
+    video.classList.add("flipped");
+  }
+
   video.addEventListener("loadedmetadata", () => {
     video.play().catch((e) => console.error("Error playing video:", e));
   });
@@ -823,6 +904,16 @@ chatTabBtn.addEventListener("click", () => {
   toggleSidePanel("chat");
 });
 
+// Handle whiteboard tab click
+whiteboardTabBtn.addEventListener("click", () => {
+  toggleSidePanel("whiteboard");
+});
+
+// Handle whiteboard button click
+whiteboardBtn.addEventListener("click", () => {
+  toggleWhiteboard();
+});
+
 // Handle participants tab click (if exists)
 if (participantsTabBtn) {
   participantsTabBtn.addEventListener("click", () => {
@@ -907,7 +998,13 @@ async function startScreenSharing() {
     if (myVideoContainer) {
       const myVideoElement = myVideoContainer.querySelector("video");
       if (myVideoElement) {
+        // Save flipped state before replacing stream
+        const wasFlipped = myVideoElement.classList.contains("flipped");
+
         myVideoElement.srcObject = stream;
+
+        // Screen shares should not be flipped (they look weird flipped)
+        myVideoElement.classList.remove("flipped");
       }
 
       // Add screen sharing indicator class
@@ -957,6 +1054,11 @@ function stopScreenSharing() {
       const myVideoElement = myVideoContainer.querySelector("video");
       if (myVideoElement) {
         myVideoElement.srcObject = originalStream;
+
+        // Restore flipped state if camera was flipped
+        if (isCameraFlipped) {
+          myVideoElement.classList.add("flipped");
+        }
       }
 
       // Remove screen sharing indicator class
@@ -1014,3 +1116,380 @@ screenShareBtn.addEventListener("click", () => {
     startScreenSharing();
   }
 });
+
+// Function to flip camera
+function flipCamera() {
+  isCameraFlipped = !isCameraFlipped;
+
+  // Find user's video element and toggle the flipped class
+  const myVideoContainer = document.querySelector(
+    `[data-user-id="${myPeer.id}"]`
+  );
+  if (myVideoContainer) {
+    const videoElement = myVideoContainer.querySelector("video");
+    if (videoElement) {
+      if (isCameraFlipped) {
+        videoElement.classList.add("flipped");
+      } else {
+        videoElement.classList.remove("flipped");
+      }
+    }
+  }
+
+  // Update button state
+  if (isCameraFlipped) {
+    flipCameraBtn.classList.add("active");
+  } else {
+    flipCameraBtn.classList.remove("active");
+  }
+
+  // Save preference to localStorage
+  localStorage.setItem("cameraFlipped", isCameraFlipped ? "true" : "false");
+
+  console.log("Camera flipped:", isCameraFlipped);
+}
+
+// Handle flip camera button click
+flipCameraBtn.addEventListener("click", () => {
+  flipCamera();
+});
+
+// Function to raise hand
+function raiseHand() {
+  isHandRaised = !isHandRaised;
+
+  // Update button state
+  if (isHandRaised) {
+    raiseHandBtn.classList.add("active");
+  } else {
+    raiseHandBtn.classList.remove("active");
+  }
+
+  // Emit event to server
+  socket.emit("raise-hand", isHandRaised);
+
+  // Add system message
+  addChatMessage({
+    system: true,
+    message: isHandRaised
+      ? `${myUserName} raised their hand`
+      : `${myUserName} lowered their hand`,
+  });
+
+  console.log("Hand raised:", isHandRaised);
+}
+
+// Handle raise hand button click
+raiseHandBtn.addEventListener("click", () => {
+  raiseHand();
+});
+
+// Function to toggle fullscreen mode
+function toggleFullScreen(videoElement = null) {
+  if (!document.fullscreenElement) {
+    // If no specific video is provided, get the first one
+    const targetElement =
+      videoElement || document.querySelector(".video-container");
+
+    if (targetElement) {
+      currentFullScreenVideo = targetElement;
+
+      if (targetElement.requestFullscreen) {
+        targetElement.requestFullscreen();
+      } else if (targetElement.webkitRequestFullscreen) {
+        /* Safari */
+        targetElement.webkitRequestFullscreen();
+      } else if (targetElement.msRequestFullscreen) {
+        /* IE11 */
+        targetElement.msRequestFullscreen();
+      }
+
+      fullScreenBtn.classList.add("active");
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      /* Safari */
+      document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) {
+      /* IE11 */
+      document.msExitFullscreen();
+    }
+
+    currentFullScreenVideo = null;
+    fullScreenBtn.classList.remove("active");
+  }
+}
+
+// Handle fullscreen button click
+fullScreenBtn.addEventListener("click", () => {
+  toggleFullScreen();
+});
+
+// Add click event to video containers for fullscreen
+videoGrid.addEventListener("dblclick", (e) => {
+  const videoContainer = e.target.closest(".video-container");
+  if (videoContainer) {
+    toggleFullScreen(videoContainer);
+  }
+});
+
+// Handle fullscreen change events
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) {
+    fullScreenBtn.classList.remove("active");
+    currentFullScreenVideo = null;
+  }
+});
+
+// Initialize emoji picker
+function initEmojiPicker() {
+  // Common emojis to display in the picker
+  const commonEmojis = [
+    "😊",
+    "😂",
+    "🥰",
+    "😍",
+    "😒",
+    "😭",
+    "😁",
+    "👍",
+    "👏",
+    "🙌",
+    "🤔",
+    "😢",
+    "❤️",
+    "✅",
+    "👋",
+    "🎉",
+    "👀",
+    "🙏",
+    "💯",
+    "🔥",
+    "⭐",
+    "🤦‍♂️",
+    "🤷‍♀️",
+    "🤣",
+  ];
+
+  // Populate the emoji picker
+  for (const emoji of commonEmojis) {
+    const emojiElement = document.createElement("span");
+    emojiElement.className = "emoji";
+    emojiElement.textContent = emoji;
+    emojiElement.addEventListener("click", () => {
+      insertEmoji(emoji);
+    });
+    emojiPicker.appendChild(emojiElement);
+  }
+
+  // Toggle emoji picker visibility
+  emojiBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    emojiPicker.classList.toggle("hidden");
+  });
+
+  // Close emoji picker when clicking elsewhere
+  document.addEventListener("click", (e) => {
+    if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
+      emojiPicker.classList.add("hidden");
+    }
+  });
+}
+
+// Insert emoji into chat input
+function insertEmoji(emoji) {
+  const cursorPos = chatInput.selectionStart;
+  const textBefore = chatInput.value.substring(0, cursorPos);
+  const textAfter = chatInput.value.substring(cursorPos);
+
+  chatInput.value = textBefore + emoji + textAfter;
+
+  // Set cursor position after emoji
+  chatInput.selectionStart = cursorPos + emoji.length;
+  chatInput.selectionEnd = cursorPos + emoji.length;
+
+  // Focus back on input
+  chatInput.focus();
+
+  // Hide picker after selection
+  emojiPicker.classList.add("hidden");
+}
+
+// Initialize whiteboard functionality
+function initWhiteboard() {
+  // Set canvas size to match container
+  function resizeCanvas() {
+    const container = whiteboard.parentElement;
+    whiteboard.width = container.clientWidth;
+    whiteboard.height = container.clientHeight;
+
+    // Redraw existing content after resize
+    redrawWhiteboard();
+  }
+
+  // Set up drawing context
+  whiteboardContext = whiteboard.getContext("2d");
+  resizeCanvas();
+
+  // Handle window resize
+  window.addEventListener("resize", resizeCanvas);
+
+  // Drawing state variables
+  let lastX = 0;
+  let lastY = 0;
+
+  // Start drawing
+  whiteboard.addEventListener("mousedown", (e) => {
+    isDrawing = true;
+    [lastX, lastY] = [
+      e.clientX - whiteboard.getBoundingClientRect().left,
+      e.clientY - whiteboard.getBoundingClientRect().top,
+    ];
+
+    // Start new stroke in drawing data
+    whiteboardDrawingData.push({
+      type: currentTool,
+      color: currentColor,
+      size: currentSize,
+      points: [{ x: lastX, y: lastY }],
+    });
+  });
+
+  // Draw while moving
+  whiteboard.addEventListener("mousemove", (e) => {
+    if (!isDrawing) return;
+
+    const currentX = e.clientX - whiteboard.getBoundingClientRect().left;
+    const currentY = e.clientY - whiteboard.getBoundingClientRect().top;
+
+    whiteboardContext.lineJoin = "round";
+    whiteboardContext.lineCap = "round";
+    whiteboardContext.strokeStyle =
+      currentTool === "eraser" ? "#fff" : currentColor;
+    whiteboardContext.lineWidth = currentSize;
+    whiteboardContext.beginPath();
+    whiteboardContext.moveTo(lastX, lastY);
+    whiteboardContext.lineTo(currentX, currentY);
+    whiteboardContext.stroke();
+
+    // Add point to current stroke
+    const currentStroke =
+      whiteboardDrawingData[whiteboardDrawingData.length - 1];
+    currentStroke.points.push({ x: currentX, y: currentY });
+
+    [lastX, lastY] = [currentX, currentY];
+
+    // Send drawing data to other users
+    socket.emit("whiteboard-draw", {
+      x0: lastX,
+      y0: lastY,
+      x1: currentX,
+      y1: currentY,
+      color: currentTool === "eraser" ? "#fff" : currentColor,
+      size: currentSize,
+    });
+  });
+
+  // Stop drawing
+  whiteboard.addEventListener("mouseup", stopDrawing);
+  whiteboard.addEventListener("mouseout", stopDrawing);
+
+  function stopDrawing() {
+    isDrawing = false;
+  }
+
+  // Handle tool selection
+  pencilTool.addEventListener("click", () => {
+    currentTool = "pencil";
+    pencilTool.classList.add("active");
+    eraserTool.classList.remove("active");
+  });
+
+  eraserTool.addEventListener("click", () => {
+    currentTool = "eraser";
+    eraserTool.classList.add("active");
+    pencilTool.classList.remove("active");
+  });
+
+  // Handle color picker
+  colorPicker.addEventListener("change", (e) => {
+    currentColor = e.target.value;
+  });
+
+  // Handle brush size
+  brushSize.addEventListener("change", (e) => {
+    currentSize = parseInt(e.target.value);
+  });
+
+  // Handle clear whiteboard
+  clearWhiteboard.addEventListener("click", () => {
+    if (confirm("Are you sure you want to clear the whiteboard?")) {
+      whiteboardContext.clearRect(0, 0, whiteboard.width, whiteboard.height);
+      whiteboardDrawingData = [];
+      socket.emit("whiteboard-clear");
+    }
+  });
+
+  // Listen for drawing from other users
+  socket.on("whiteboard-draw", (data) => {
+    if (!whiteboardContext) return;
+
+    whiteboardContext.lineJoin = "round";
+    whiteboardContext.lineCap = "round";
+    whiteboardContext.strokeStyle = data.color;
+    whiteboardContext.lineWidth = data.size;
+    whiteboardContext.beginPath();
+    whiteboardContext.moveTo(data.x0, data.y0);
+    whiteboardContext.lineTo(data.x1, data.y1);
+    whiteboardContext.stroke();
+  });
+
+  // Listen for clear whiteboard from other users
+  socket.on("whiteboard-clear", () => {
+    if (!whiteboardContext) return;
+    whiteboardContext.clearRect(0, 0, whiteboard.width, whiteboard.height);
+    whiteboardDrawingData = [];
+  });
+}
+
+// Redraw whiteboard from stored data
+function redrawWhiteboard() {
+  if (!whiteboardContext) return;
+
+  whiteboardContext.clearRect(0, 0, whiteboard.width, whiteboard.height);
+
+  for (const stroke of whiteboardDrawingData) {
+    if (stroke.points.length < 2) continue;
+
+    whiteboardContext.lineJoin = "round";
+    whiteboardContext.lineCap = "round";
+    whiteboardContext.strokeStyle =
+      stroke.type === "eraser" ? "#fff" : stroke.color;
+    whiteboardContext.lineWidth = stroke.size;
+
+    whiteboardContext.beginPath();
+    whiteboardContext.moveTo(stroke.points[0].x, stroke.points[0].y);
+
+    for (let i = 1; i < stroke.points.length; i++) {
+      whiteboardContext.lineTo(stroke.points[i].x, stroke.points[i].y);
+    }
+
+    whiteboardContext.stroke();
+  }
+}
+
+// Toggle whiteboard visibility
+function toggleWhiteboard() {
+  isWhiteboardVisible = !isWhiteboardVisible;
+
+  // Update button state
+  if (isWhiteboardVisible) {
+    whiteboardBtn.classList.add("active");
+    toggleSidePanel("whiteboard");
+  } else {
+    whiteboardBtn.classList.remove("active");
+    toggleSidePanel("chat");
+  }
+}

@@ -41,6 +41,7 @@
         <div class="side-panel">
           <div class="panel-header">
             <button id="chatTabBtn" class="tab-btn active">Chat</button>
+            <button id="whiteboardTabBtn" class="tab-btn">Whiteboard</button>
             <% if (isRoomCreator) { %>
             <button id="participantsTabBtn" class="tab-btn">
               Participants
@@ -55,12 +56,33 @@
                 <span class="icon">📎</span>
               </label>
               <input id="file-upload" type="file" hidden />
+              <button id="emojiBtn" class="emoji-btn">
+                <span class="icon">😊</span>
+              </button>
+              <div id="emojiPicker" class="emoji-picker hidden"></div>
               <input
                 type="text"
                 id="chat-input"
                 placeholder="Type a message..."
               />
               <button id="sendMessageBtn">Send</button>
+            </div>
+          </div>
+
+          <div id="whiteboardPanel" class="panel-content">
+            <div class="whiteboard-container">
+              <canvas id="whiteboard"></canvas>
+            </div>
+            <div class="whiteboard-controls">
+              <button id="pencilTool" class="wb-tool active">✏️</button>
+              <button id="eraserTool" class="wb-tool">🧽</button>
+              <button id="clearWhiteboard" class="wb-tool">🧹</button>
+              <input type="color" id="colorPicker" value="#000000" />
+              <select id="brushSize">
+                <option value="2">Small</option>
+                <option value="5" selected>Medium</option>
+                <option value="10">Large</option>
+              </select>
             </div>
           </div>
 
@@ -82,8 +104,20 @@
         <button id="videoBtn" class="control-btn">
           <span class="icon">📹</span>
         </button>
+        <button id="flipCameraBtn" class="control-btn">
+          <span class="icon">🔄</span>
+        </button>
         <button id="screenShareBtn" class="control-btn">
           <span class="icon">📺</span>
+        </button>
+        <button id="raiseHandBtn" class="control-btn">
+          <span class="icon">✋</span>
+        </button>
+        <button id="fullScreenBtn" class="control-btn">
+          <span class="icon">🔍</span>
+        </button>
+        <button id="whiteboardBtn" class="control-btn">
+          <span class="icon">🎨</span>
         </button>
         <button id="chatBtn" class="control-btn">
           <span class="icon">💬</span>

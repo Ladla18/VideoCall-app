@@ -247,12 +247,41 @@ io.on("connection", (socket) => {
       const participant = rooms[roomId].participants[userId];
       io.to(roomId).emit("receive-message", {
         sender: userId,
-        senderName: participant
-          ? participant.name
-          : `User-${userId.substring(0, 5)}`,
+        senderName: participant ? participant.name : "Unknown User",
         message: message,
-        timestamp: new Date().toISOString(),
+        timestamp: Date.now(),
       });
+
+      console.log(
+        `Message from ${userId} in room ${roomId}: ${message.substring(0, 50)}${
+          message.length > 50 ? "..." : ""
+        }`
+      );
+    });
+
+    // Handle raise hand event
+    socket.on("raise-hand", (isRaised) => {
+      // Broadcast to all users in the room
+      socket.to(roomId).emit("user-hand-status", userId, isRaised);
+
+      console.log(
+        `User ${userId} ${
+          isRaised ? "raised" : "lowered"
+        } hand in room ${roomId}`
+      );
+    });
+
+    // Handle whiteboard drawing events
+    socket.on("whiteboard-draw", (drawingData) => {
+      // Broadcast the drawing data to all other users in the room
+      socket.to(roomId).emit("whiteboard-draw", drawingData);
+    });
+
+    // Handle whiteboard clear event
+    socket.on("whiteboard-clear", () => {
+      // Broadcast to all other users in the room
+      socket.to(roomId).emit("whiteboard-clear");
+      console.log(`User ${userId} cleared whiteboard in room ${roomId}`);
     });
 
     // Handle remove participant (only from room creator)
