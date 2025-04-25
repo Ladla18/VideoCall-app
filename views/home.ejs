@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Calling App</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/home.css" />
+  </head>
+  <body>
+    <div class="home-container">
+      <div class="home-card">
+        <h1>Video Calling App</h1>
+        <div class="home-options">
+          <div class="join-room">
+            <h2>Join a Room</h2>
+            <form action="/join-room" method="POST">
+              <input
+                type="text"
+                name="roomId"
+                placeholder="Enter 6-digit Room ID"
+                pattern="[0-9]{6}"
+                title="Please enter a 6-digit number"
+                required
+              />
+              <button type="submit" class="join-btn">Join Room</button>
+            </form>
+          </div>
+          <div class="divider"></div>
+          <div class="create-room">
+            <h2>Create a New Room</h2>
+            <p>Start a new video call session</p>
+            <a href="/create" class="create-btn">Create Room</a>
+          </div>
+        </div>
+        <div class="app-info">
+          <p>Connect with video and audio in real-time</p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,111 @@
+.home-container {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f0f2f5;
+}
+
+.home-card {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  width: 90%;
+  max-width: 600px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.home-card h1 {
+  color: #2c3e50;
+  margin-bottom: 2rem;
+  font-size: 2.2rem;
+}
+
+.home-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .home-options {
+    flex-direction: row;
+    align-items: stretch;
+  }
+}
+
+.join-room,
+.create-room {
+  flex: 1;
+  padding: 1.5rem;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  display: flex;
+  flex-direction: column;
+}
+
+.join-room h2,
+.create-room h2 {
+  font-size: 1.4rem;
+  margin-bottom: 1rem;
+  color: #2c3e50;
+}
+
+.divider {
+  width: 100%;
+  height: 1px;
+  background-color: #ddd;
+}
+
+@media (min-width: 768px) {
+  .divider {
+    width: 1px;
+    height: auto;
+  }
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: auto;
+}
+
+input[type="text"] {
+  padding: 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.join-btn,
+.create-btn {
+  padding: 0.8rem;
+  border: none;
+  border-radius: 6px;
+  background-color: #3498db;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  text-decoration: none;
+  display: inline-block;
+  margin-top: auto;
+}
+
+.join-btn:hover,
+.create-btn:hover {
+  background-color: #2980b9;
+}
+
+.create-room p {
+  margin-bottom: 1.5rem;
+  color: #666;
+}
+
+.app-info {
+  margin-top: 2rem;
+  color: #666;
+  font-size: 0.9rem;
+}
