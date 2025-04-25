@@ -9,7 +9,16 @@ const { ExpressPeerServer } = require("peer");
 // Create Peer server
 const peerServer = ExpressPeerServer(server, {
   debug: true,
-  path: "/peerjs",
+  path: "/",
+});
+
+// Log PeerJS server events
+peerServer.on("connection", (client) => {
+  console.log("PeerJS client connected with ID:", client.getId());
+});
+
+peerServer.on("disconnect", (client) => {
+  console.log("PeerJS client disconnected with ID:", client.getId());
 });
 
 // Function to generate a 6-digit numeric room ID
@@ -74,6 +83,16 @@ app.get("/create", (req, res) => {
 // Room route - changed from /:room to /room/:roomId for clarity
 app.get("/room/:roomId", (req, res) => {
   res.render("room", { roomId: req.params.roomId });
+});
+
+// Add a debugging route for PeerJS
+app.get("/peerjs-status", (req, res) => {
+  res.json({
+    status: "PeerJS server is running",
+    path: "/peerjs",
+    debug: true,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Socket.io connection setup

@@ -14,15 +14,22 @@ let isVideoOff = false;
 // Get the host from the current URL
 const currentHost = window.location.hostname;
 const currentProtocol = window.location.protocol;
-const PORT = currentProtocol === "https:" ? 443 : 3000;
+const PORT =
+  window.location.port || (currentProtocol === "https:" ? 443 : 3000);
 
 // Create a peer connection using our self-hosted PeerJS server
 const myPeer = new Peer(undefined, {
   host: currentHost,
   port: PORT,
-  path: "/peerjs",
+  path: "/peerjs", // Path stays the same as our mount point
   secure: currentProtocol === "https:",
   debug: 3,
+  config: {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:global.stun.twilio.com:3478" },
+    ],
+  },
 });
 
 // Create a video element for the current user
@@ -82,6 +89,29 @@ myPeer.on("open", (id) => {
 // Log any peer connection errors
 myPeer.on("error", (err) => {
   console.error("PeerJS error:", err);
+
+  // If the error is about connecting to the server, try to fallback to public PeerJS servers
+  if (
+    err.type === "peer-unavailable" ||
+    err.type === "server-error" ||
+    err.type === "network"
+  ) {
+    console.log("Trying to connect to public PeerJS server as fallback...");
+    // Create a new peer with the public server
+    const fallbackPeer = new Peer(undefined, {
+      secure: true,
+      host: "peerjs-server.herokuapp.com",
+      port: 443,
+    });
+
+    // If the fallback connects successfully
+    fallbackPeer.on("open", (id) => {
+      console.log("Connected to fallback PeerJS server with ID:", id);
+      // Replace the original peer with the fallback
+      myPeer = fallbackPeer;
+      socket.emit("join-room", ROOM_ID, id);
+    });
+  }
 });
 
 // Function to connect to a new user
