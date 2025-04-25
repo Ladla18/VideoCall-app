@@ -3,6 +3,7 @@ const app = express();
 const server = require("http").Server(app);
 const io = require("socket.io")(server);
 const path = require("path");
+const cors = require("cors");
 
 // Function to generate a 6-digit numeric room ID
 function generateRoomId() {
@@ -13,6 +14,14 @@ function generateRoomId() {
 app.set("view engine", "ejs");
 app.use(express.static("public"));
 app.use(express.urlencoded({ extended: true }));
+app.use(
+  cors({
+    origin: "https://videocall-app-uyb6.onrender.com",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 // Routes
 app.get("/", (req, res) => {
