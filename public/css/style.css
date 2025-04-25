@@ -365,3 +365,133 @@ body {
   font-size: 0.8rem;
   color: #666;
 }
+
+/* Add active screen sharing button style */
+.control-btn.active {
+  background-color: #3498db;
+  color: white;
+}
+
+/* Add screen sharing indicator */
+.video-container.screen-sharing::before {
+  content: "Screen sharing";
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background-color: rgba(231, 76, 60, 0.8);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  z-index: 10;
+}
+
+/* User info and name change styles */
+.user-info {
+  margin-left: 15px;
+  display: flex;
+  align-items: center;
+}
+
+.user-btn {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.3s;
+}
+
+.user-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.user-name {
+  font-weight: 500;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Modal styles for username change */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal.active {
+  display: flex;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 25px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 350px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  margin-bottom: 15px;
+}
+
+.modal-header h2 {
+  font-size: 1.2rem;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.modal-body {
+  margin-bottom: 20px;
+}
+
+.modal-body input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  margin-top: 5px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-btn {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.modal-btn.cancel {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.modal-btn.save {
+  background-color: #3498db;
+  color: white;
+}
+
+.modal-btn:hover {
+  opacity: 0.9;
+}

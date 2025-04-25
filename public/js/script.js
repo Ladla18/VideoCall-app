@@ -2,6 +2,7 @@ const socket = io("/");
 const videoGrid = document.getElementById("video-grid");
 const muteBtn = document.getElementById("muteBtn");
 const videoBtn = document.getElementById("videoBtn");
+const screenShareBtn = document.getElementById("screenShareBtn");
 const leaveBtn = document.getElementById("leaveBtn");
 const copyBtn = document.getElementById("copyBtn");
 const chatBtn = document.getElementById("chatBtn");
@@ -10,6 +11,14 @@ const chatPanel = document.getElementById("chatPanel");
 const chatMessages = document.getElementById("chat-messages");
 const chatInput = document.getElementById("chat-input");
 const sendMessageBtn = document.getElementById("sendMessageBtn");
+
+// Username change elements
+const changeNameBtn = document.getElementById("changeNameBtn");
+const displayUserName = document.getElementById("displayUserName");
+const usernameModal = document.getElementById("usernameModal");
+const newUsernameInput = document.getElementById("newUsername");
+const saveNameBtn = document.getElementById("saveNameBtn");
+const cancelNameBtn = document.getElementById("cancelNameBtn");
 
 // Get participant elements if room creator
 let participantsTabBtn, participantsPanel, participantsList;
@@ -26,6 +35,9 @@ let isAudioMuted = false;
 let isVideoOff = false;
 let sidebarVisible = false;
 let unreadMessages = 0;
+let isScreenSharing = false;
+let screenStream = null;
+let originalStream = null;
 
 // Store username
 let myUserName = "You";
@@ -227,11 +239,133 @@ socket.on("user-removed", (userId) => {
   });
 });
 
+// Username change functionality
+function initUsernameChange() {
+  // Update display name initially
+  displayUserName.textContent = myUserName;
+
+  // Open modal when change button is clicked
+  changeNameBtn.addEventListener("click", () => {
+    newUsernameInput.value = myUserName === "You" ? "" : myUserName;
+    usernameModal.classList.add("active");
+    newUsernameInput.focus();
+  });
+
+  // Close modal when cancel is clicked
+  cancelNameBtn.addEventListener("click", () => {
+    usernameModal.classList.remove("active");
+  });
+
+  // Save new username
+  saveNameBtn.addEventListener("click", saveUsername);
+
+  // Allow pressing Enter to save
+  newUsernameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      saveUsername();
+    }
+  });
+
+  // Close modal when clicking outside
+  usernameModal.addEventListener("click", (e) => {
+    if (e.target === usernameModal) {
+      usernameModal.classList.remove("active");
+    }
+  });
+}
+
+// Function to save username
+function saveUsername() {
+  const newName = newUsernameInput.value.trim();
+
+  if (newName && newName !== myUserName) {
+    const oldName = myUserName;
+    myUserName = newName;
+
+    // Save to localStorage
+    localStorage.setItem("videoCallUserName", newName);
+
+    // Update display
+    displayUserName.textContent = newName;
+
+    // Update name tag on video
+    const myVideoContainer = document.querySelector(
+      `[data-user-id="${myPeer.id}"]`
+    );
+    if (myVideoContainer) {
+      const nameTag = myVideoContainer.querySelector(".name-tag");
+      if (nameTag) {
+        nameTag.textContent = `${newName} (You)`;
+      }
+    }
+
+    // Notify server and other users about name change
+    socket.emit("username-changed", newName);
+
+    // Add system message
+    addChatMessage({
+      system: true,
+      message: `${oldName} changed their name to ${newName}`,
+    });
+  }
+
+  // Close modal
+  usernameModal.classList.remove("active");
+}
+
+// Socket event for when a user changes their username
+socket.on("user-changed-name", (userId, newName) => {
+  if (userId !== myPeer.id) {
+    const oldName = userNames[userId] || "A user";
+
+    // Update stored username
+    userNames[userId] = newName;
+
+    // Update name tag on video
+    const userVideoContainer = document.querySelector(
+      `[data-user-id="${userId}"]`
+    );
+    if (userVideoContainer) {
+      const nameTag = userVideoContainer.querySelector(".name-tag");
+      if (nameTag) {
+        nameTag.textContent = newName;
+      }
+    }
+
+    // Update participants list if visible
+    if (IS_ROOM_CREATOR && participantsList) {
+      const participantItem = participantsList.querySelector(
+        `[data-user-id="${userId}"]`
+      );
+      if (participantItem) {
+        const nameElement = participantItem.querySelector(".participant-name");
+        if (nameElement) {
+          // Keep any badges/indicators from the original HTML
+          const isCreator = nameElement.textContent.includes("(Host)");
+          nameElement.innerHTML = `
+            <span class="status"></span>
+            ${newName}${isCreator ? " (Host)" : ""}
+          `;
+        }
+      }
+    }
+
+    // Add system message
+    addChatMessage({
+      system: true,
+      message: `${oldName} changed their name to ${newName}`,
+    });
+  }
+});
+
 // When peer connection is established
 myPeer.on("open", (id) => {
   console.log("My peer ID is: " + id);
   // Join room with ID, user name, and room creator status
   socket.emit("join-room", ROOM_ID, id, myUserName);
+
+  // Initialize username change functionality
+  initUsernameChange();
 });
 
 // Log any peer connection errors
@@ -575,4 +709,147 @@ copyBtn.addEventListener("click", () => {
     .catch((err) => {
       console.error("Failed to copy text: ", err);
     });
+});
+
+// Function to start screen sharing
+async function startScreenSharing() {
+  try {
+    // Save original stream to restore later
+    originalStream = myVideoStream;
+
+    // Get screen sharing stream
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        cursor: "always",
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+      },
+    });
+
+    // Add a handler to detect when user stops sharing via the browser UI
+    stream.getVideoTracks()[0].onended = () => {
+      stopScreenSharing();
+    };
+
+    // Replace current video track with screen share track
+    screenStream = stream;
+
+    // Replace tracks for all peers
+    replaceVideoTrackForAllPeers(stream.getVideoTracks()[0]);
+
+    // Replace my own video
+    const myVideoContainer = document.querySelector(
+      `[data-user-id="${myPeer.id}"]`
+    );
+    if (myVideoContainer) {
+      const myVideoElement = myVideoContainer.querySelector("video");
+      if (myVideoElement) {
+        myVideoElement.srcObject = stream;
+      }
+
+      // Add screen sharing indicator class
+      myVideoContainer.classList.add("screen-sharing");
+    }
+
+    // Update state and button
+    isScreenSharing = true;
+    screenShareBtn.classList.add("active");
+    screenShareBtn.querySelector(".icon").textContent = "🔴";
+
+    // Notify users that you're screen sharing
+    addChatMessage({
+      system: true,
+      message: `${myUserName} started screen sharing`,
+    });
+
+    console.log("Screen sharing started");
+  } catch (err) {
+    console.error("Error starting screen share:", err);
+    if (err.name === "NotAllowedError") {
+      addChatMessage({
+        system: true,
+        message: `Screen sharing was cancelled`,
+      });
+    } else {
+      alert(
+        "Failed to start screen sharing: " + (err.message || "Unknown error")
+      );
+    }
+  }
+}
+
+// Function to stop screen sharing
+function stopScreenSharing() {
+  if (!isScreenSharing || !originalStream) return;
+
+  try {
+    // Replace screen share track with original video track
+    replaceVideoTrackForAllPeers(originalStream.getVideoTracks()[0]);
+
+    // Replace my own video
+    const myVideoContainer = document.querySelector(
+      `[data-user-id="${myPeer.id}"]`
+    );
+    if (myVideoContainer) {
+      const myVideoElement = myVideoContainer.querySelector("video");
+      if (myVideoElement) {
+        myVideoElement.srcObject = originalStream;
+      }
+
+      // Remove screen sharing indicator class
+      myVideoContainer.classList.remove("screen-sharing");
+    }
+
+    // Stop all screen share tracks
+    if (screenStream) {
+      screenStream.getTracks().forEach((track) => track.stop());
+      screenStream = null;
+    }
+
+    // Update state and button
+    isScreenSharing = false;
+    screenShareBtn.classList.remove("active");
+    screenShareBtn.querySelector(".icon").textContent = "📺";
+
+    // Notify users that you've stopped screen sharing
+    addChatMessage({
+      system: true,
+      message: `${myUserName} stopped screen sharing`,
+    });
+
+    // Restore original stream as myVideoStream
+    myVideoStream = originalStream;
+
+    console.log("Screen sharing stopped");
+  } catch (err) {
+    console.error("Error stopping screen share:", err);
+  }
+}
+
+// Function to replace video track for all peer connections
+function replaceVideoTrackForAllPeers(newTrack) {
+  for (let userId in peers) {
+    try {
+      const sender = peers[userId].peerConnection
+        .getSenders()
+        .find((s) => s.track && s.track.kind === "video");
+
+      if (sender) {
+        sender.replaceTrack(newTrack);
+      }
+    } catch (err) {
+      console.error("Error replacing track for peer " + userId, err);
+    }
+  }
+}
+
+// Handle screen share button click
+screenShareBtn.addEventListener("click", () => {
+  if (isScreenSharing) {
+    stopScreenSharing();
+  } else {
+    startScreenSharing();
+  }
 });

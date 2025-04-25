@@ -26,6 +26,12 @@
         <div class="room-info">
           <p>Room ID: <span id="roomId"><%= roomId %></span></p>
           <button id="copyBtn">Copy Room ID</button>
+          <div class="user-info">
+            <button id="changeNameBtn" class="user-btn">
+              <span class="user-name" id="displayUserName">You</span>
+              <span class="icon">✏️</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -72,12 +78,32 @@
         <button id="videoBtn" class="control-btn">
           <span class="icon">📹</span>
         </button>
+        <button id="screenShareBtn" class="control-btn">
+          <span class="icon">📺</span>
+        </button>
         <button id="chatBtn" class="control-btn">
           <span class="icon">💬</span>
         </button>
         <button id="leaveBtn" class="control-btn leave">
           <span class="icon">🚪</span> Leave
         </button>
+      </div>
+    </div>
+
+    <!-- Username change modal -->
+    <div id="usernameModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Change Your Name</h2>
+        </div>
+        <div class="modal-body">
+          <label for="newUsername">Enter a new name:</label>
+          <input type="text" id="newUsername" placeholder="Your name" />
+        </div>
+        <div class="modal-footer">
+          <button id="cancelNameBtn" class="modal-btn cancel">Cancel</button>
+          <button id="saveNameBtn" class="modal-btn save">Save</button>
+        </div>
       </div>
     </div>
   </body>

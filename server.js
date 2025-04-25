@@ -154,6 +154,29 @@ io.on("connection", (socket) => {
       rooms[roomId].creator
     );
 
+    // Handle username changes
+    socket.on("username-changed", (newName) => {
+      // Update name in participants list
+      if (rooms[roomId] && rooms[roomId].participants[userId]) {
+        const oldName = rooms[roomId].participants[userId].name;
+        rooms[roomId].participants[userId].name = newName;
+
+        console.log(
+          `User ${userId} changed name from ${oldName} to ${newName} in room ${roomId}`
+        );
+
+        // Notify all users in room about the name change
+        io.to(roomId).emit("user-changed-name", userId, newName);
+
+        // Update the participants list for everyone
+        io.to(roomId).emit(
+          "update-participants",
+          rooms[roomId].participants,
+          rooms[roomId].creator
+        );
+      }
+    });
+
     // Handle chat messages
     socket.on("send-message", (message) => {
       const participant = rooms[roomId].participants[userId];
