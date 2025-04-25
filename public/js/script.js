@@ -603,6 +603,16 @@ myPeer.on("open", (id) => {
 
   // Initialize whiteboard
   initWhiteboard();
+
+  // Debug check for whiteboard
+  console.log("Checking whiteboard elements:");
+  console.log("Whiteboard element exists:", !!whiteboard);
+  console.log(
+    "Whiteboard container exists:",
+    !!(whiteboard && whiteboard.parentElement)
+  );
+  console.log("whiteboardBtn element exists:", !!whiteboardBtn);
+  console.log("whiteboardTabBtn element exists:", !!whiteboardTabBtn);
 });
 
 // Log any peer connection errors
@@ -811,17 +821,31 @@ function toggleSidePanel(panel) {
 
   if (panel === "chat") {
     chatPanel.classList.add("active");
+    whiteboardPanel.classList.remove("active");
     if (participantsPanel) participantsPanel.classList.remove("active");
+
     chatTabBtn.classList.add("active");
+    whiteboardTabBtn.classList.remove("active");
     if (participantsTabBtn) participantsTabBtn.classList.remove("active");
 
     // Reset unread count when opening the chat
     unreadMessages = 0;
     updateChatButtonNotification();
+  } else if (panel === "whiteboard") {
+    chatPanel.classList.remove("active");
+    whiteboardPanel.classList.add("active");
+    if (participantsPanel) participantsPanel.classList.remove("active");
+
+    chatTabBtn.classList.remove("active");
+    whiteboardTabBtn.classList.add("active");
+    if (participantsTabBtn) participantsTabBtn.classList.remove("active");
   } else if (panel === "participants" && participantsPanel) {
     chatPanel.classList.remove("active");
+    whiteboardPanel.classList.remove("active");
     participantsPanel.classList.add("active");
+
     chatTabBtn.classList.remove("active");
+    whiteboardTabBtn.classList.remove("active");
     participantsTabBtn.classList.add("active");
   }
 
@@ -1319,9 +1343,26 @@ function insertEmoji(emoji) {
 
 // Initialize whiteboard functionality
 function initWhiteboard() {
+  console.log("Initializing whiteboard...");
+
+  if (!whiteboard) {
+    console.error("Whiteboard element not found!");
+    return;
+  }
+
   // Set canvas size to match container
   function resizeCanvas() {
     const container = whiteboard.parentElement;
+    if (!container) {
+      console.error("Whiteboard container not found!");
+      return;
+    }
+
+    console.log(
+      "Resizing canvas to:",
+      container.clientWidth,
+      container.clientHeight
+    );
     whiteboard.width = container.clientWidth;
     whiteboard.height = container.clientHeight;
 
@@ -1331,7 +1372,9 @@ function initWhiteboard() {
 
   // Set up drawing context
   whiteboardContext = whiteboard.getContext("2d");
-  resizeCanvas();
+
+  // Initial sizing
+  setTimeout(resizeCanvas, 100);
 
   // Handle window resize
   window.addEventListener("resize", resizeCanvas);
@@ -1393,12 +1436,39 @@ function initWhiteboard() {
   });
 
   // Stop drawing
+  whiteboard.addEventListener("mousedown", (e) => e.preventDefault()); // Prevent text selection
   whiteboard.addEventListener("mouseup", stopDrawing);
   whiteboard.addEventListener("mouseout", stopDrawing);
 
   function stopDrawing() {
     isDrawing = false;
   }
+
+  // Also support touch events for mobile
+  whiteboard.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent("mousedown", {
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+    });
+    whiteboard.dispatchEvent(mouseEvent);
+  });
+
+  whiteboard.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent("mousemove", {
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+    });
+    whiteboard.dispatchEvent(mouseEvent);
+  });
+
+  whiteboard.addEventListener("touchend", (e) => {
+    const mouseEvent = new MouseEvent("mouseup");
+    whiteboard.dispatchEvent(mouseEvent);
+  });
 
   // Handle tool selection
   pencilTool.addEventListener("click", () => {
@@ -1452,6 +1522,8 @@ function initWhiteboard() {
     whiteboardContext.clearRect(0, 0, whiteboard.width, whiteboard.height);
     whiteboardDrawingData = [];
   });
+
+  console.log("Whiteboard initialized successfully");
 }
 
 // Redraw whiteboard from stored data
@@ -1488,6 +1560,23 @@ function toggleWhiteboard() {
   if (isWhiteboardVisible) {
     whiteboardBtn.classList.add("active");
     toggleSidePanel("whiteboard");
+
+    // Force resize the canvas when made visible
+    setTimeout(() => {
+      if (whiteboard && whiteboardContext) {
+        const container = whiteboard.parentElement;
+        if (container) {
+          console.log(
+            "Resizing whiteboard after toggle:",
+            container.clientWidth,
+            container.clientHeight
+          );
+          whiteboard.width = container.clientWidth;
+          whiteboard.height = container.clientHeight;
+          redrawWhiteboard();
+        }
+      }
+    }, 100);
   } else {
     whiteboardBtn.classList.remove("active");
     toggleSidePanel("chat");

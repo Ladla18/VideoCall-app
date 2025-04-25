@@ -598,6 +598,10 @@ body {
 /* Whiteboard Styles */
 #whiteboardPanel {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
 }
 
 .whiteboard-container {
@@ -605,6 +609,9 @@ body {
   position: relative;
   background-color: white;
   overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 #whiteboard {
@@ -615,6 +622,8 @@ body {
   width: 100%;
   height: 100%;
   cursor: crosshair;
+  touch-action: none; /* Prevent scrolling on touch devices */
+  background-color: white;
 }
 
 .whiteboard-controls {
