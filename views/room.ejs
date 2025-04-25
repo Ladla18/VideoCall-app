@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="/css/style.css" />
     <script>
       const ROOM_ID = "<%= roomId %>";
+      const IS_ROOM_CREATOR_STR = "<%= isRoomCreator %>";
+      const IS_ROOM_CREATOR = IS_ROOM_CREATOR_STR === "true";
     </script>
     <script
       src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"
@@ -30,17 +32,52 @@
       <div class="main-content">
         <div class="video-grid" id="video-grid"></div>
 
-        <div class="controls">
-          <button id="muteBtn" class="control-btn">
-            <span class="icon">🎤</span>
-          </button>
-          <button id="videoBtn" class="control-btn">
-            <span class="icon">📹</span>
-          </button>
-          <button id="leaveBtn" class="control-btn leave">
-            <span class="icon">🚪</span> Leave
-          </button>
+        <div class="side-panel">
+          <div class="panel-header">
+            <button id="chatTabBtn" class="tab-btn active">Chat</button>
+            <% if (isRoomCreator) { %>
+            <button id="participantsTabBtn" class="tab-btn">
+              Participants
+            </button>
+            <% } %>
+          </div>
+
+          <div id="chatPanel" class="panel-content active">
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-container">
+              <input
+                type="text"
+                id="chat-input"
+                placeholder="Type a message..."
+              />
+              <button id="sendMessageBtn">Send</button>
+            </div>
+          </div>
+
+          <% if (isRoomCreator) { %>
+          <div id="participantsPanel" class="panel-content">
+            <h3>Participants</h3>
+            <ul id="participants-list" class="participants-list">
+              <!-- Participants will be added dynamically -->
+            </ul>
+          </div>
+          <% } %>
         </div>
+      </div>
+
+      <div class="controls">
+        <button id="muteBtn" class="control-btn">
+          <span class="icon">🎤</span>
+        </button>
+        <button id="videoBtn" class="control-btn">
+          <span class="icon">📹</span>
+        </button>
+        <button id="chatBtn" class="control-btn">
+          <span class="icon">💬</span>
+        </button>
+        <button id="leaveBtn" class="control-btn leave">
+          <span class="icon">🚪</span> Leave
+        </button>
       </div>
     </div>
   </body>

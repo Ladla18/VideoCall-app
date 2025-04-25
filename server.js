@@ -26,6 +26,9 @@ function generateRoomId() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Store room creators and participants
+const rooms = {};
+
 // Set EJS as the view engine
 app.set("view engine", "ejs");
 app.use(express.static("public"));
@@ -77,12 +80,27 @@ app.post("/join-room", (req, res) => {
 
 // Create a new room
 app.get("/create", (req, res) => {
-  res.redirect(`/room/${generateRoomId()}`);
+  const roomId = generateRoomId();
+  rooms[roomId] = { creator: null, participants: {} };
+  res.redirect(`/room/${roomId}`);
 });
 
 // Room route - changed from /:room to /room/:roomId for clarity
 app.get("/room/:roomId", (req, res) => {
-  res.render("room", { roomId: req.params.roomId });
+  const roomId = req.params.roomId;
+
+  // Initialize room if it doesn't exist
+  if (!rooms[roomId]) {
+    rooms[roomId] = { creator: null, participants: {} };
+  }
+
+  // Determine if first user to join the room (creator)
+  const isRoomCreator = !rooms[roomId].creator;
+
+  res.render("room", {
+    roomId: roomId,
+    isRoomCreator: isRoomCreator,
+  });
 });
 
 // Add a debugging route for PeerJS
@@ -97,12 +115,121 @@ app.get("/peerjs-status", (req, res) => {
 
 // Socket.io connection setup
 io.on("connection", (socket) => {
-  socket.on("join-room", (roomId, userId) => {
+  socket.on("join-room", (roomId, userId, userName) => {
+    // Add user to room
     socket.join(roomId);
-    socket.to(roomId).emit("user-connected", userId);
 
+    // Set the creator if not already set
+    if (!rooms[roomId]) {
+      rooms[roomId] = { creator: null, participants: {} };
+    }
+
+    if (!rooms[roomId].creator) {
+      rooms[roomId].creator = userId;
+      console.log(
+        `User ${userId} (${userName}) set as room creator for room ${roomId}`
+      );
+    }
+
+    // Add to participants list
+    rooms[roomId].participants[userId] = {
+      id: userId,
+      name: userName || `User-${userId.substring(0, 5)}`,
+      socketId: socket.id,
+    };
+
+    // Inform other users about the new participant
+    socket
+      .to(roomId)
+      .emit(
+        "user-connected",
+        userId,
+        userName || `User-${userId.substring(0, 5)}`
+      );
+
+    // Send the updated participants list to everyone
+    io.to(roomId).emit(
+      "update-participants",
+      rooms[roomId].participants,
+      rooms[roomId].creator
+    );
+
+    // Handle chat messages
+    socket.on("send-message", (message) => {
+      const participant = rooms[roomId].participants[userId];
+      io.to(roomId).emit("receive-message", {
+        sender: userId,
+        senderName: participant
+          ? participant.name
+          : `User-${userId.substring(0, 5)}`,
+        message: message,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    // Handle remove participant (only from room creator)
+    socket.on("remove-participant", (participantId) => {
+      // Check if the request is from the room creator
+      if (userId === rooms[roomId].creator) {
+        const participantSocketId =
+          rooms[roomId].participants[participantId]?.socketId;
+
+        // Notify the removed participant
+        if (participantSocketId) {
+          io.to(participantSocketId).emit("you-were-removed");
+        }
+
+        // Notify others that participant was removed
+        socket.to(roomId).emit("user-removed", participantId);
+
+        // Remove from participants list
+        delete rooms[roomId].participants[participantId];
+
+        // Update the participants list for everyone
+        io.to(roomId).emit(
+          "update-participants",
+          rooms[roomId].participants,
+          rooms[roomId].creator
+        );
+      }
+    });
+
+    // Handle disconnect
     socket.on("disconnect", () => {
+      // Check if this was the room creator
+      if (rooms[roomId] && userId === rooms[roomId].creator) {
+        // If creator leaves, assign a new creator if other participants exist
+        const remainingParticipants = Object.keys(rooms[roomId].participants);
+        remainingParticipants.splice(remainingParticipants.indexOf(userId), 1);
+
+        if (remainingParticipants.length > 0) {
+          // Assign the first remaining participant as the new creator
+          rooms[roomId].creator = remainingParticipants[0];
+
+          // Notify everyone about the new creator
+          io.to(roomId).emit("new-creator", remainingParticipants[0]);
+        } else {
+          // If no participants left, delete the room
+          delete rooms[roomId];
+        }
+      }
+
+      // Remove from participants list
+      if (rooms[roomId] && rooms[roomId].participants[userId]) {
+        delete rooms[roomId].participants[userId];
+      }
+
+      // Notify others
       socket.to(roomId).emit("user-disconnected", userId);
+
+      // Update the participants list
+      if (rooms[roomId]) {
+        io.to(roomId).emit(
+          "update-participants",
+          rooms[roomId].participants,
+          rooms[roomId].creator
+        );
+      }
     });
   });
 });

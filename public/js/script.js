@@ -4,12 +4,47 @@ const muteBtn = document.getElementById("muteBtn");
 const videoBtn = document.getElementById("videoBtn");
 const leaveBtn = document.getElementById("leaveBtn");
 const copyBtn = document.getElementById("copyBtn");
+const chatBtn = document.getElementById("chatBtn");
+const chatTabBtn = document.getElementById("chatTabBtn");
+const chatPanel = document.getElementById("chatPanel");
+const chatMessages = document.getElementById("chat-messages");
+const chatInput = document.getElementById("chat-input");
+const sendMessageBtn = document.getElementById("sendMessageBtn");
+
+// Get participant elements if room creator
+let participantsTabBtn, participantsPanel, participantsList;
+if (IS_ROOM_CREATOR) {
+  participantsTabBtn = document.getElementById("participantsTabBtn");
+  participantsPanel = document.getElementById("participantsPanel");
+  participantsList = document.getElementById("participants-list");
+}
 
 // Initialize variables for audio and video state
 let myVideoStream;
 let myVideo;
 let isAudioMuted = false;
 let isVideoOff = false;
+let sidebarVisible = false;
+let unreadMessages = 0;
+
+// Store username
+let myUserName = "You";
+
+// Ask for username
+function promptForUsername() {
+  let name = localStorage.getItem("videoCallUserName");
+
+  if (!name) {
+    name = prompt("Enter your name for the video call:", "");
+    if (name && name.trim() !== "") {
+      localStorage.setItem("videoCallUserName", name);
+    } else {
+      name = `User-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+  }
+
+  return name;
+}
 
 // Get the host from the current URL
 const currentHost = window.location.hostname;
@@ -21,7 +56,7 @@ const PORT =
 const myPeer = new Peer(undefined, {
   host: currentHost,
   port: PORT,
-  path: "/peerjs", // Path stays the same as our mount point
+  path: "/peerjs",
   secure: currentProtocol === "https:",
   debug: 3,
   config: {
@@ -38,6 +73,10 @@ myVideo.muted = true; // Mute our own video for ourselves
 
 // Store connected peers to manage disconnections
 const peers = {};
+const userNames = {};
+
+// Get username before joining
+myUserName = promptForUsername();
 
 // Get user media (camera and microphone)
 navigator.mediaDevices
@@ -48,7 +87,7 @@ navigator.mediaDevices
   .then((stream) => {
     // Set the stream and add our video to the grid
     myVideoStream = stream;
-    addVideoStream(myVideo, stream);
+    addVideoStream(myVideo, stream, null, true);
 
     // Answer calls from other users
     myPeer.on("call", (call) => {
@@ -56,13 +95,18 @@ navigator.mediaDevices
       const video = document.createElement("video");
 
       call.on("stream", (userVideoStream) => {
-        addVideoStream(video, userVideoStream);
+        addVideoStream(video, userVideoStream, userNames[call.peer] || null);
       });
     });
 
     // Socket event for when a new user connects
-    socket.on("user-connected", (userId) => {
+    socket.on("user-connected", (userId, userName) => {
+      userNames[userId] = userName;
       connectToNewUser(userId, stream);
+      addChatMessage({
+        system: true,
+        message: `${userName} joined the room`,
+      });
     });
   })
   .catch((error) => {
@@ -78,12 +122,75 @@ socket.on("user-disconnected", (userId) => {
     peers[userId].close();
     delete peers[userId];
   }
+
+  // Remove user's video
+  const userVideo = document.querySelector(`[data-user-id="${userId}"]`);
+  if (userVideo) {
+    userVideo.remove();
+  }
+
+  // Add system message that user left
+  addChatMessage({
+    system: true,
+    message: `${userNames[userId] || "A user"} left the room`,
+  });
+});
+
+// Socket event for chat messages
+socket.on("receive-message", (data) => {
+  addChatMessage(data);
+
+  // If the sidebar is not visible, increment unread count
+  if (!sidebarVisible) {
+    unreadMessages++;
+    updateChatButtonNotification();
+  }
+});
+
+// Socket event for updating participants list
+socket.on("update-participants", (participants, creatorId) => {
+  // Update the UI if current user is the room creator
+  if (IS_ROOM_CREATOR && participantsList) {
+    updateParticipantsList(participants, creatorId);
+  }
+
+  // If creator changed and current user is now the creator
+  if (creatorId === myPeer.id && !IS_ROOM_CREATOR) {
+    window.location.reload(); // Refresh to gain creator privileges
+  }
+});
+
+// Socket event when user is removed
+socket.on("you-were-removed", () => {
+  alert("You have been removed from the room by the host.");
+  leaveRoom();
+});
+
+// Socket event when a user is removed
+socket.on("user-removed", (userId) => {
+  if (peers[userId]) {
+    peers[userId].close();
+    delete peers[userId];
+  }
+
+  // Remove user's video
+  const userVideo = document.querySelector(`[data-user-id="${userId}"]`);
+  if (userVideo) {
+    userVideo.remove();
+  }
+
+  // Add system message that user was removed
+  addChatMessage({
+    system: true,
+    message: `${userNames[userId] || "A user"} was removed from the room`,
+  });
 });
 
 // When peer connection is established
 myPeer.on("open", (id) => {
   console.log("My peer ID is: " + id);
-  socket.emit("join-room", ROOM_ID, id);
+  // Join room with ID, user name, and room creator status
+  socket.emit("join-room", ROOM_ID, id, myUserName);
 });
 
 // Log any peer connection errors
@@ -109,7 +216,7 @@ myPeer.on("error", (err) => {
       console.log("Connected to fallback PeerJS server with ID:", id);
       // Replace the original peer with the fallback
       myPeer = fallbackPeer;
-      socket.emit("join-room", ROOM_ID, id);
+      socket.emit("join-room", ROOM_ID, id, myUserName);
     });
   }
 });
@@ -120,7 +227,13 @@ function connectToNewUser(userId, stream) {
   const video = document.createElement("video");
 
   call.on("stream", (userVideoStream) => {
-    addVideoStream(video, userVideoStream);
+    addVideoStream(
+      video,
+      userVideoStream,
+      userNames[userId] || null,
+      false,
+      userId
+    );
   });
 
   call.on("close", () => {
@@ -131,12 +244,180 @@ function connectToNewUser(userId, stream) {
 }
 
 // Function to add a video stream to the grid
-function addVideoStream(video, stream) {
+function addVideoStream(
+  video,
+  stream,
+  userName,
+  isLocalUser = false,
+  userId = null
+) {
+  const videoContainer = document.createElement("div");
+  videoContainer.className = "video-container";
+  if (userId) {
+    videoContainer.setAttribute("data-user-id", userId);
+  }
+
   video.srcObject = stream;
   video.addEventListener("loadedmetadata", () => {
     video.play();
   });
-  videoGrid.append(video);
+
+  const nameTag = document.createElement("div");
+  nameTag.className = "name-tag";
+  nameTag.textContent = isLocalUser
+    ? myUserName + " (You)"
+    : userName || "User";
+
+  videoContainer.appendChild(video);
+  videoContainer.appendChild(nameTag);
+  videoGrid.append(videoContainer);
+}
+
+// Function to add a chat message
+function addChatMessage(data) {
+  const messageDiv = document.createElement("div");
+
+  if (data.system) {
+    // System message
+    messageDiv.className = "chat-message system";
+    messageDiv.innerHTML = `<div class="message-content">${data.message}</div>`;
+  } else {
+    // Regular user message
+    const isLocalUser = data.sender === myPeer.id;
+    messageDiv.className = isLocalUser
+      ? "chat-message sent"
+      : "chat-message received";
+
+    let senderName = isLocalUser ? "You" : data.senderName || "User";
+    const messageTime = data.timestamp
+      ? new Date(data.timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "";
+
+    messageDiv.innerHTML = `
+      <div class="message-sender">${senderName}</div>
+      <div class="message-content">${data.message}</div>
+      <div class="message-time">${messageTime}</div>
+    `;
+  }
+
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Function to update the participant list
+function updateParticipantsList(participants, creatorId) {
+  if (!participantsList) return;
+
+  // Clear the current list
+  participantsList.innerHTML = "";
+
+  // Add each participant
+  Object.values(participants).forEach((participant) => {
+    const isCreator = participant.id === creatorId;
+    const isCurrentUser = participant.id === myPeer.id;
+
+    const listItem = document.createElement("li");
+    listItem.className = "participant-item";
+    listItem.setAttribute("data-user-id", participant.id);
+
+    let nameDisplay = participant.name;
+    if (isCreator) nameDisplay += " (Host)";
+    if (isCurrentUser) nameDisplay += " (You)";
+
+    listItem.innerHTML = `
+      <div class="participant-name">
+        <span class="status"></span>
+        ${nameDisplay}
+      </div>
+      ${
+        !isCurrentUser && IS_ROOM_CREATOR
+          ? `<div class="participant-actions">
+          <button class="remove-btn" data-user-id="${participant.id}">Remove</button>
+        </div>`
+          : ""
+      }
+    `;
+
+    participantsList.appendChild(listItem);
+  });
+
+  // Add event listeners to remove buttons
+  const removeButtons = participantsList.querySelectorAll(".remove-btn");
+  removeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const userId = button.getAttribute("data-user-id");
+      removeParticipant(userId);
+    });
+  });
+}
+
+// Function to remove a participant
+function removeParticipant(userId) {
+  if (confirm("Are you sure you want to remove this participant?")) {
+    socket.emit("remove-participant", userId);
+  }
+}
+
+// Function to toggle the side panel
+function toggleSidePanel(panel) {
+  const sidePanel = document.querySelector(".side-panel");
+
+  if (panel === "chat") {
+    chatPanel.classList.add("active");
+    if (participantsPanel) participantsPanel.classList.remove("active");
+    chatTabBtn.classList.add("active");
+    if (participantsTabBtn) participantsTabBtn.classList.remove("active");
+
+    // Reset unread count when opening the chat
+    unreadMessages = 0;
+    updateChatButtonNotification();
+  } else if (panel === "participants" && participantsPanel) {
+    chatPanel.classList.remove("active");
+    participantsPanel.classList.add("active");
+    chatTabBtn.classList.remove("active");
+    participantsTabBtn.classList.add("active");
+  }
+
+  sidebarVisible = true;
+}
+
+// Function to leave room
+function leaveRoom() {
+  // Stop all tracks
+  if (myVideoStream) {
+    myVideoStream.getTracks().forEach((track) => {
+      track.stop();
+    });
+  }
+
+  // Close all peer connections
+  for (let userId in peers) {
+    peers[userId].close();
+  }
+
+  // Redirect to home page
+  window.location.href = "/";
+}
+
+// Function to update chat button notification
+function updateChatButtonNotification() {
+  const notification = chatBtn.querySelector(".notification");
+
+  if (unreadMessages > 0) {
+    if (!notification) {
+      const notificationSpan = document.createElement("span");
+      notificationSpan.className = "notification";
+      notificationSpan.textContent = unreadMessages;
+      chatBtn.appendChild(notificationSpan);
+    } else {
+      notification.textContent = unreadMessages;
+    }
+  } else if (notification) {
+    notification.remove();
+  }
 }
 
 // Handle mute button click
@@ -169,20 +450,47 @@ videoBtn.addEventListener("click", () => {
   }
 });
 
+// Handle chat button click
+chatBtn.addEventListener("click", () => {
+  toggleSidePanel("chat");
+});
+
+// Handle chat tab click
+chatTabBtn.addEventListener("click", () => {
+  toggleSidePanel("chat");
+});
+
+// Handle participants tab click (if exists)
+if (participantsTabBtn) {
+  participantsTabBtn.addEventListener("click", () => {
+    toggleSidePanel("participants");
+  });
+}
+
+// Handle send message button click
+sendMessageBtn.addEventListener("click", () => {
+  sendMessage();
+});
+
+// Handle chat input keydown (send on Enter)
+chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    sendMessage();
+  }
+});
+
+// Function to send a message
+function sendMessage() {
+  const message = chatInput.value.trim();
+  if (message) {
+    socket.emit("send-message", message);
+    chatInput.value = "";
+  }
+}
+
 // Handle leave button click
 leaveBtn.addEventListener("click", () => {
-  // Stop all tracks
-  myVideoStream.getTracks().forEach((track) => {
-    track.stop();
-  });
-
-  // Close all peer connections
-  for (let userId in peers) {
-    peers[userId].close();
-  }
-
-  // Redirect to home page
-  window.location.href = "/";
+  leaveRoom();
 });
 
 // Handle copy room ID button

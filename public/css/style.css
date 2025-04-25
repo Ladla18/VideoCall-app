@@ -55,16 +55,17 @@ body {
 .main-content {
   flex: 1;
   display: flex;
-  flex-direction: column;
   padding: 1rem;
+  gap: 1rem;
 }
 
 .video-grid {
+  flex: 1;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1rem;
-  flex: 1;
-  padding: 1rem;
+  height: calc(100vh - 180px);
+  overflow-y: auto;
 }
 
 .video-grid video {
@@ -133,4 +134,234 @@ body {
   height: 60%;
   background-color: red;
   transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* Side Panel Styles */
+.side-panel {
+  width: 300px;
+  background-color: white;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  height: calc(100vh - 180px);
+}
+
+.panel-header {
+  display: flex;
+  border-bottom: 1px solid #eee;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 0.8rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #666;
+  transition: all 0.3s;
+}
+
+.tab-btn.active {
+  color: #3498db;
+  font-weight: bold;
+  border-bottom: 2px solid #3498db;
+}
+
+.panel-content {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.panel-content.active {
+  display: flex;
+}
+
+/* Chat Styles */
+.chat-messages {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.chat-message {
+  padding: 0.8rem;
+  border-radius: 8px;
+  max-width: 80%;
+  word-break: break-word;
+}
+
+.chat-message.sent {
+  background-color: #e3f2fd;
+  align-self: flex-end;
+}
+
+.chat-message.received {
+  background-color: #f1f1f1;
+  align-self: flex-start;
+}
+
+.message-sender {
+  font-weight: bold;
+  font-size: 0.8rem;
+  margin-bottom: 0.3rem;
+}
+
+.message-time {
+  font-size: 0.7rem;
+  color: #999;
+  margin-top: 0.3rem;
+  text-align: right;
+}
+
+.chat-input-container {
+  display: flex;
+  padding: 0.8rem;
+  border-top: 1px solid #eee;
+  gap: 0.5rem;
+}
+
+#chat-input {
+  flex: 1;
+  padding: 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+#sendMessageBtn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+#sendMessageBtn:hover {
+  background-color: #2980b9;
+}
+
+/* Participants List Styles */
+.participants-list {
+  list-style: none;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.participant-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem;
+  border-bottom: 1px solid #eee;
+}
+
+.participant-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.participant-name .status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #4caf50;
+}
+
+.participant-actions button {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.participant-actions button:hover {
+  background-color: #c0392b;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+  }
+
+  .side-panel {
+    width: 100%;
+    height: 300px;
+  }
+
+  .video-grid {
+    height: auto;
+  }
+}
+
+/* Chat Button in controls */
+#chatBtn {
+  position: relative;
+}
+
+#chatBtn .notification {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 15px;
+  height: 15px;
+  background-color: #e74c3c;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+}
+
+/* Add these new styles for video containers */
+.video-container {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: #000;
+}
+
+.video-container video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.name-tag {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+/* System message styles */
+.chat-message.system {
+  background-color: rgba(0, 0, 0, 0.05);
+  align-self: center;
+  text-align: center;
+  padding: 5px 15px;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  color: #666;
 }
