@@ -4,6 +4,13 @@ const server = require("http").Server(app);
 const io = require("socket.io")(server);
 const path = require("path");
 const cors = require("cors");
+const { ExpressPeerServer } = require("peer");
+
+// Create Peer server
+const peerServer = ExpressPeerServer(server, {
+  debug: true,
+  path: "/peerjs",
+});
 
 // Function to generate a 6-digit numeric room ID
 function generateRoomId() {
@@ -14,9 +21,33 @@ function generateRoomId() {
 app.set("view engine", "ejs");
 app.use(express.static("public"));
 app.use(express.urlencoded({ extended: true }));
+
+// Handle favicon.ico requests
+app.get("/favicon.ico", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "img", "favicon.svg"));
+});
+
+// Use PeerJS server
+app.use("/peerjs", peerServer);
+
+// Use CORS - update to use dynamic origin based on environment
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://videocall-app-uyb6.onrender.com",
+];
+
 app.use(
   cors({
-    origin: "https://videocall-app-uyb6.onrender.com",
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg =
+          "The CORS policy for this site does not allow access from the specified Origin.";
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -61,4 +92,5 @@ io.on("connection", (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`PeerJS server running on /peerjs`);
 });

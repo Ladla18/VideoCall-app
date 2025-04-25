@@ -11,11 +11,18 @@ let myVideo;
 let isAudioMuted = false;
 let isVideoOff = false;
 
-// Create a peer connection using free PeerJS server instead of local host
+// Get the host from the current URL
+const currentHost = window.location.hostname;
+const currentProtocol = window.location.protocol;
+const PORT = currentProtocol === "https:" ? 443 : 3000;
+
+// Create a peer connection using our self-hosted PeerJS server
 const myPeer = new Peer(undefined, {
-  secure: true,
-  host: "peerjs-server.herokuapp.com",
-  port: 443,
+  host: currentHost,
+  port: PORT,
+  path: "/peerjs",
+  secure: currentProtocol === "https:",
+  debug: 3,
 });
 
 // Create a video element for the current user
@@ -68,7 +75,13 @@ socket.on("user-disconnected", (userId) => {
 
 // When peer connection is established
 myPeer.on("open", (id) => {
+  console.log("My peer ID is: " + id);
   socket.emit("join-room", ROOM_ID, id);
+});
+
+// Log any peer connection errors
+myPeer.on("error", (err) => {
+  console.error("PeerJS error:", err);
 });
 
 // Function to connect to a new user
