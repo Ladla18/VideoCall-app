@@ -91,22 +91,56 @@ navigator.mediaDevices
 
     // Answer calls from other users
     myPeer.on("call", (call) => {
+      console.log("Received call from:", call.peer);
+
+      // Check if we already have this peer's video displayed
+      const existingVideo = document.querySelector(
+        `[data-user-id="${call.peer}"]`
+      );
+      if (existingVideo) {
+        console.log("Already have video for this user, not creating duplicate");
+        call.answer(stream); // Still answer the call to establish connection
+        return;
+      }
+
       call.answer(stream);
       const video = document.createElement("video");
 
       call.on("stream", (userVideoStream) => {
-        addVideoStream(video, userVideoStream, userNames[call.peer] || null);
+        console.log("Received stream from call:", call.peer);
+        // Make sure we don't add duplicate videos for the same user
+        const existingVideo = document.querySelector(
+          `[data-user-id="${call.peer}"]`
+        );
+        if (existingVideo) {
+          console.log("Video already exists for this call, not adding another");
+          return;
+        }
+
+        addVideoStream(
+          video,
+          userVideoStream,
+          userNames[call.peer] || null,
+          false,
+          call.peer
+        );
       });
     });
 
     // Socket event for when a new user connects
     socket.on("user-connected", (userId, userName) => {
-      userNames[userId] = userName;
-      connectToNewUser(userId, stream);
-      addChatMessage({
-        system: true,
-        message: `${userName} joined the room`,
-      });
+      console.log("User connected event received:", userId, userName);
+      // Only handle connection if we're not already connected to this user
+      if (!peers[userId]) {
+        userNames[userId] = userName;
+        connectToNewUser(userId, myVideoStream);
+        addChatMessage({
+          system: true,
+          message: `${userName} joined the room`,
+        });
+      } else {
+        console.log("Ignoring duplicate user-connected event for:", userId);
+      }
     });
   })
   .catch((error) => {
@@ -118,7 +152,11 @@ navigator.mediaDevices
 
 // Socket event for when a user disconnects
 socket.on("user-disconnected", (userId) => {
+  console.log("User disconnected:", userId);
+
+  // Close the peer connection if it exists
   if (peers[userId]) {
+    console.log("Closing peer connection for user:", userId);
     peers[userId].close();
     delete peers[userId];
   }
@@ -126,7 +164,10 @@ socket.on("user-disconnected", (userId) => {
   // Remove user's video
   const userVideo = document.querySelector(`[data-user-id="${userId}"]`);
   if (userVideo) {
+    console.log("Removing video element for user:", userId);
     userVideo.remove();
+  } else {
+    console.log("No video element found for user:", userId);
   }
 
   // Add system message that user left
@@ -223,10 +264,28 @@ myPeer.on("error", (err) => {
 
 // Function to connect to a new user
 function connectToNewUser(userId, stream) {
+  console.log("Connecting to new user:", userId);
+
+  // Check if we're already connected to this user
+  if (peers[userId]) {
+    console.log(
+      "Already connected to this user, ignoring duplicate connection"
+    );
+    return;
+  }
+
   const call = myPeer.call(userId, stream);
   const video = document.createElement("video");
 
   call.on("stream", (userVideoStream) => {
+    console.log("Received stream from user:", userId);
+    // Remove any existing video from this user first to prevent duplicates
+    const existingVideo = document.querySelector(`[data-user-id="${userId}"]`);
+    if (existingVideo) {
+      console.log("Removing existing video element for user:", userId);
+      existingVideo.remove();
+    }
+
     addVideoStream(
       video,
       userVideoStream,
@@ -237,7 +296,7 @@ function connectToNewUser(userId, stream) {
   });
 
   call.on("close", () => {
-    video.remove();
+    video.parentElement?.remove();
   });
 
   peers[userId] = call;
@@ -251,6 +310,15 @@ function addVideoStream(
   isLocalUser = false,
   userId = null
 ) {
+  // Check if this user's video already exists (to prevent duplicates)
+  if (userId && !isLocalUser) {
+    const existingVideo = document.querySelector(`[data-user-id="${userId}"]`);
+    if (existingVideo) {
+      console.log("Video already exists for user:", userId);
+      return;
+    }
+  }
+
   const videoContainer = document.createElement("div");
   videoContainer.className = "video-container";
   if (userId) {
@@ -259,7 +327,7 @@ function addVideoStream(
 
   video.srcObject = stream;
   video.addEventListener("loadedmetadata", () => {
-    video.play();
+    video.play().catch((e) => console.error("Error playing video:", e));
   });
 
   const nameTag = document.createElement("div");
