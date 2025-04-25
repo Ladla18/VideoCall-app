@@ -11,6 +11,7 @@ const chatPanel = document.getElementById("chatPanel");
 const chatMessages = document.getElementById("chat-messages");
 const chatInput = document.getElementById("chat-input");
 const sendMessageBtn = document.getElementById("sendMessageBtn");
+const fileUploadInput = document.getElementById("file-upload");
 
 // Username change elements
 const changeNameBtn = document.getElementById("changeNameBtn");
@@ -358,6 +359,163 @@ socket.on("user-changed-name", (userId, newName) => {
   }
 });
 
+// Initialize file sharing
+function initFileSharing() {
+  fileUploadInput.addEventListener("change", handleFileUpload);
+}
+
+// Handle file selection
+async function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    // Check file size (limit to 5MB for demo)
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File size exceeds 5MB limit. Please choose a smaller file.");
+      fileUploadInput.value = ""; // Clear the input
+      return;
+    }
+
+    // Read the file
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+      const fileData = e.target.result;
+
+      // Prepare file info
+      const fileInfo = {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        data: fileData,
+      };
+
+      // Create a progress message in chat
+      const messageDiv = document.createElement("div");
+      messageDiv.className = "chat-message sent file-shared";
+      messageDiv.innerHTML = `
+        <div class="message-sender">You</div>
+        <div class="message-content">Uploading file...</div>
+        <div class="file-attachment">
+          <div class="file-icon">${getFileIcon(file.type)}</div>
+          <div class="file-info">
+            <div class="file-name">${file.name}</div>
+            <div class="file-size">${formatFileSize(file.size)}</div>
+            <div class="upload-progress">
+              <div class="progress-bar" id="progress-${Date.now()}"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      // Share the file with others
+      socket.emit("share-file", fileInfo);
+
+      // Reset the file input
+      fileUploadInput.value = "";
+    };
+
+    reader.readAsDataURL(file); // Read as Data URL for small files
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    alert("Failed to upload file: " + error.message);
+    fileUploadInput.value = ""; // Clear the input
+  }
+}
+
+// Function to get appropriate icon for file type
+function getFileIcon(mimeType) {
+  if (mimeType.startsWith("image/")) {
+    return "🖼️";
+  } else if (mimeType.startsWith("video/")) {
+    return "🎬";
+  } else if (mimeType.startsWith("audio/")) {
+    return "🎵";
+  } else if (mimeType.includes("pdf")) {
+    return "📄";
+  } else if (mimeType.includes("word") || mimeType.includes("document")) {
+    return "📝";
+  } else if (mimeType.includes("excel") || mimeType.includes("spreadsheet")) {
+    return "📊";
+  } else if (
+    mimeType.includes("presentation") ||
+    mimeType.includes("powerpoint")
+  ) {
+    return "📑";
+  } else if (mimeType.includes("text")) {
+    return "📄";
+  } else if (mimeType.includes("zip") || mimeType.includes("compressed")) {
+    return "🗜️";
+  } else {
+    return "📁";
+  }
+}
+
+// Format file size in human-readable format
+function formatFileSize(bytes) {
+  if (bytes < 1024) {
+    return bytes + " bytes";
+  } else if (bytes < 1024 * 1024) {
+    return (bytes / 1024).toFixed(1) + " KB";
+  } else {
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+}
+
+// Handle received files
+socket.on("file-shared", (fileInfo) => {
+  const isLocalUser = fileInfo.sharedBy === myPeer.id;
+
+  // Create message element
+  const messageDiv = document.createElement("div");
+  messageDiv.className = isLocalUser
+    ? "chat-message sent file-shared"
+    : "chat-message received file-shared";
+
+  const senderName = isLocalUser
+    ? "You"
+    : userNames[fileInfo.sharedBy] || fileInfo.sharedByName || "User";
+  const messageTime = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  messageDiv.innerHTML = `
+    <div class="message-sender">${senderName}</div>
+    <div class="message-content">Shared a file</div>
+    <div class="file-attachment">
+      <div class="file-icon">${getFileIcon(fileInfo.type)}</div>
+      <div class="file-info">
+        <div class="file-name">${fileInfo.name}</div>
+        <div class="file-size">${formatFileSize(fileInfo.size)}</div>
+      </div>
+      <a class="file-download" href="${fileInfo.data}" download="${
+    fileInfo.name
+  }">Download</a>
+    </div>
+    <div class="message-time">${messageTime}</div>
+  `;
+
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  // If the sidebar is not visible, increment unread count
+  if (!sidebarVisible) {
+    unreadMessages++;
+    updateChatButtonNotification();
+  }
+
+  // Add system message
+  addChatMessage({
+    system: true,
+    message: `${senderName} shared a file: ${fileInfo.name}`,
+  });
+});
+
 // When peer connection is established
 myPeer.on("open", (id) => {
   console.log("My peer ID is: " + id);
@@ -366,6 +524,9 @@ myPeer.on("open", (id) => {
 
   // Initialize username change functionality
   initUsernameChange();
+
+  // Initialize file sharing
+  initFileSharing();
 });
 
 // Log any peer connection errors

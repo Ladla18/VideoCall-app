@@ -33,6 +33,7 @@ const rooms = {};
 app.set("view engine", "ejs");
 app.use(express.static("public"));
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json()); // For parsing application/json
 
 // Handle favicon.ico requests
 app.get("/favicon.ico", (req, res) => {
@@ -65,6 +66,20 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// For file sharing - create a temporary store for files
+const fileStore = {};
+
+// Clean up files older than 24 hours
+setInterval(() => {
+  const now = Date.now();
+  Object.keys(fileStore).forEach((fileId) => {
+    // If file is older than 24 hours, delete it
+    if (now - fileStore[fileId].timestamp > 24 * 60 * 60 * 1000) {
+      delete fileStore[fileId];
+    }
+  });
+}, 60 * 60 * 1000); // Check every hour
 
 // Routes
 app.get("/", (req, res) => {
@@ -101,6 +116,31 @@ app.get("/room/:roomId", (req, res) => {
     roomId: roomId,
     isRoomCreator: isRoomCreator,
   });
+});
+
+// File sharing endpoints
+app.post("/upload", (req, res) => {
+  // This would be handled by a file upload middleware like multer in a production app
+  // For this demo, we'll simulate a response for file upload
+
+  res.json({
+    success: true,
+    message: "File uploaded successfully",
+    fileId: "demo" + Date.now(),
+  });
+});
+
+// Get file endpoint
+app.get("/files/:fileId", (req, res) => {
+  const fileId = req.params.fileId;
+
+  // In a real implementation, check if file exists
+  if (fileStore[fileId]) {
+    // Send the file
+    res.send(fileStore[fileId].data);
+  } else {
+    res.status(404).send("File not found");
+  }
 });
 
 // Add a debugging route for PeerJS
@@ -175,6 +215,31 @@ io.on("connection", (socket) => {
           rooms[roomId].creator
         );
       }
+    });
+
+    // Handle file sharing
+    socket.on("share-file", (fileInfo) => {
+      // Store the file data in memory (would use proper storage in production)
+      const fileId = userId + "_" + Date.now();
+      fileStore[fileId] = {
+        ...fileInfo,
+        timestamp: Date.now(),
+        sharedBy: userId,
+        sharedByName: rooms[roomId].participants[userId].name,
+      };
+
+      // Add a unique URL to the file info
+      fileInfo.fileId = fileId;
+      fileInfo.downloadUrl = `/files/${fileId}`;
+      fileInfo.sharedBy = userId;
+      fileInfo.sharedByName = rooms[roomId].participants[userId].name;
+
+      // Broadcast the file to all users in the room
+      io.to(roomId).emit("file-shared", fileInfo);
+
+      console.log(
+        `User ${userId} shared file ${fileInfo.name} in room ${roomId}`
+      );
     });
 
     // Handle chat messages
